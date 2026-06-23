@@ -1,8 +1,8 @@
-from fastapi import FastAPI,Header
+from fastapi import FastAPI,Header,UploadFile,File
 from .database import engine
 from .models import Base
 from .database import SessionLocal
-from .models import User
+from .models import User,Video
 from .schemas import UserCreate,UserLogin
 from .auth import hash_password,create_access_token,verify_password,verify_token
 
@@ -79,3 +79,41 @@ def get_me(autherization:str=Header(None)):
         "user_id":payload["user_id"],
         "email":payload["email"]
     }
+
+@app.get("/videos")
+def get_videos():
+
+    db = SessionLocal()
+
+    videos = db.query(Video).all()
+
+    return [
+        {
+            "id": video.id,
+            "title": video.title,
+            "filename": video.filename,
+            "status": video.status
+        }
+        for video in videos
+
+    ]
+@app.post("/videos/upload")
+async def upload_video(file: UploadFile=File(...)):
+    file_path = f"uploads/{file.filename}"
+    db =SessionLocal()
+    with open(file_path, "wb") as buffer: 
+        content = await file.read() 
+        buffer.write(content) 
+
+    new_video = Video(
+        title=file.filename,
+        filename=file.filename,
+        storage_url=file_path,
+        status="uploaded",
+        user_id=1
+    )
+
+    db.add(new_video)
+    db.commit()    
+    return {"message": "uploaded"}    
+
