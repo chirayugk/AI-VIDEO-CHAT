@@ -5,6 +5,11 @@ from .database import SessionLocal
 from .models import User,Video
 from .schemas import UserCreate,UserLogin
 from .auth import hash_password,create_access_token,verify_password,verify_token
+from .models import Video, VideoTranscript,VideoSummary
+from .services.transcription import transcribe_video
+from .services.summary import generate_summary
+
+
 
 Base.metadata.create_all(bind=engine)
 
@@ -64,11 +69,11 @@ def login(user: UserLogin):
     }
 
 @app.get("/me")
-def get_me(autherization:str=Header(None)):
-    if not autherization:
+def get_me(authorization:str=Header(None)):
+    if not authorization:
         return {"error":"token missing"}
     
-    token=autherization.split(" ")[1]
+    token=authorization.split(" ")[1]
 
     payload=verify_token(token)
 
@@ -115,5 +120,140 @@ async def upload_video(file: UploadFile=File(...)):
 
     db.add(new_video)
     db.commit()    
-    return {"message": "uploaded"}    
+    db.refresh(new_video)
+    return {"video_id": new_video.id,
+            "filename":new_video.filename,
+            "status":new_video.status}    
 
+@app.post("/videos/{video_id}/process")
+def process_video(video_id: int):
+
+    db = SessionLocal()
+
+    video = db.query(Video).filter(
+        Video.id == video_id
+    ).first()
+
+    if not video:
+        return {"error": "Video not found"}
+    existing = db.query(VideoTranscript).filter(VideoTranscript.video_id == video.id).first()
+
+    if existing:
+            return {
+        "message": "Transcript already exists"
+    }
+    video.status="processing"
+    db.commit()
+
+    try :
+        result = transcribe_video(
+        video.storage_url
+        )
+
+        transcript = VideoTranscript(
+        video_id=video.id,
+        transcript=result["transcript"],
+        language=result["language"]
+        )
+
+        db.add(transcript)
+
+        video.status = "completed"
+
+        db.commit()
+
+        return {
+        "video_id": video.id,
+    "status": video.status,
+        "language":result["language"]
+        }
+    except Exception as e:
+        video.status="failed"
+        db.commit()
+        return {
+            "error":str(e)
+        }
+
+@app.get("/videos/{video_id}/transcript")
+def get_transcript(video_id: int):
+
+  db = SessionLocal()
+  try:
+    transcript = db.query(
+        VideoTranscript
+    ).filter(
+        VideoTranscript.video_id == video_id
+    ).first()
+
+    if not transcript:
+         return {"error": "Transcript not found"}
+
+    return {
+ "video_id": transcript.video_id,
+        "language": transcript.language,
+            "created_at": transcript.created_at,
+        "transcript": transcript.transcript    }
+  finally:
+    db.close()
+
+
+@app.post("/videos/{video_id}/summary")
+def create_summary(video_id: int):
+        db =SessionLocal()
+        video=db.query(Video).filter(Video.id==video_id).first()
+
+        if not video:
+            return {
+                "error":"video not found"
+            }
+        transcript = db.query(VideoTranscript).filter(
+        VideoTranscript.video_id == video_id
+    ).first()
+
+        if not transcript:
+          return {"error": "Transcript not found"}
+        existing_summary = db.query(VideoSummary).filter(
+                   VideoSummary.video_id == video_id
+                     ).first()
+
+        if existing_summary:
+          return {
+            "message": "Summary already exists"
+         }
+
+        result = generate_summary(
+        transcript.transcript
+             )
+        summary = VideoSummary(
+        video_id=video.id,
+        summary=result["summary"],
+        key_takeaways=str(result["key_takeaways"]),
+        topics=str(result["topics"])
+    )
+
+        db.add(summary)
+        db.commit()
+
+        return {
+        "message": "Summary generated successfully"
+    }
+
+@app.get("/videos/{video_id}/summary")
+def get_summary(video_id: int):
+
+    db = SessionLocal()
+
+    summary = db.query(VideoSummary).filter(
+        VideoSummary.video_id == video_id
+    ).first()
+
+    if not summary:
+        return {
+            "error": "Summary not found"
+        }
+
+    return {
+        "summary": summary.summary,
+        "key_takeaways": summary.key_takeaways,
+        "topics": summary.topics
+    }
