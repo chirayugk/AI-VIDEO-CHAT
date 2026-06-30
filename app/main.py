@@ -8,6 +8,17 @@ from .auth import hash_password,create_access_token,verify_password,verify_token
 from .models import Video, VideoTranscript,VideoSummary
 from .services.transcription import transcribe_video
 from .services.summary import generate_summary
+from .services.chunking import chunk_transcript
+from .schemas import ChatRequest
+from .services.embedding import generate_embedding
+from .services.vector_store import (
+    create_index,
+    save_index,
+    save_chunks,
+    ensure_directory
+)
+
+from .services.rag import answer_question
 
 
 
@@ -256,4 +267,95 @@ def get_summary(video_id: int):
         "summary": summary.summary,
         "key_takeaways": summary.key_takeaways,
         "topics": summary.topics
+    }
+
+
+@app.get("/videos/{video_id}/chunks")
+def get_chunks(video_id: int):
+
+    db = SessionLocal()
+
+    transcript = db.query(
+        VideoTranscript
+    ).filter(
+        VideoTranscript.video_id == video_id
+    ).first()
+
+    if not transcript:
+        return {"error": "Transcript not found"}
+
+    chunks = chunk_transcript(
+        transcript.transcript
+    )
+
+    return {
+        "number_of_chunks": len(chunks),
+        "chunks": chunks
+    }
+
+@app.post("/videos/{video_id}/chat")
+def chat_video(
+    video_id: int,
+    request: ChatRequest
+):
+
+    answer = answer_question(
+        video_id,
+        request.question
+    )
+
+    return {
+        "answer": answer
+    }
+
+@app.post("/videos/{video_id}/embed")
+def create_embeddings(video_id: int):
+
+    db = SessionLocal()
+
+    transcript = db.query(
+        VideoTranscript
+    ).filter(
+        VideoTranscript.video_id == video_id
+    ).first()
+
+    if not transcript:
+        return {
+            "error": "Transcript not found"
+        }
+
+    chunks = chunk_transcript(
+        transcript.transcript
+    )
+
+    embeddings = []
+
+    for chunk in chunks:
+
+        vector = generate_embedding(chunk)
+
+        embeddings.append(vector)
+
+    index = create_index(
+        embeddings
+    )
+
+    ensure_directory()
+
+    save_index(
+        index,
+        f"faiss_indexes/video_{video_id}.index"
+    )
+
+    save_chunks(
+        chunks,
+        f"faiss_indexes/video_{video_id}_chunks.json"
+    )
+
+    return {
+
+        "message":"Embeddings Created",
+
+        "chunks":len(chunks)
+
     }

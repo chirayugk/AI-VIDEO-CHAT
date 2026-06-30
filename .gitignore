@@ -1,4 +1,83 @@
+```gitignore
+# -----------------------------
+# Python
+# -----------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+venv/
+.env/
+ENV/
+env/
+
+# Environment Variables
 .env
-__pycache__
-uploads
-test_summart.py
+
+# IDE
+.vscode/
+.idea/
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Python Packaging
+*.egg-info/
+dist/
+build/
+
+# Logs
+*.log
+
+# Pytest
+.pytest_cache/
+
+# Mypy
+.mypy_cache/
+
+# -----------------------------
+# Uploaded Videos
+# -----------------------------
+uploads/
+
+# -----------------------------
+# FAISS Indexes
+# -----------------------------
+faiss_indexes/
+
+# -----------------------------
+# Temporary Files
+# -----------------------------
+temp/
+tmp/
+
+# -----------------------------
+# Database
+# -----------------------------
+*.db
+*.sqlite3
+
+# -----------------------------
+# Node (Frontend)
+# -----------------------------
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
+# npm
+npm-debug.log*
+
+# -----------------------------
+# Coverage
+# -----------------------------
+.coverage
+htmlcov/
+
+# -----------------------------
+# Misc
+# -----------------------------
+*.swp
+*.bak
+```
